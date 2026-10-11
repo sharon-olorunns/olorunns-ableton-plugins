@@ -1,6 +1,6 @@
 # Olorunns Plugins
 
-Three plugins for Ableton Live, made for experimenting with indie-folk and hyperpop sounds.
+Four plugins for Ableton Live, made for experimenting with indie-folk and hyperpop sounds.
 They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standard and Suite).
 
 | | |
@@ -8,6 +8,7 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 | **Prism**: sing one note, hold a chord on your keyboard, and your voice sings the chord (think Imogen Heap's "Hide and Seek" or Bon Iver's "715 - CRΣΣKS"). An auto mode adds in-key harmonies without a keyboard, and Live mode lets you sing through it with almost no delay. | ![Prism](docs/prism.png) |
 | **Halo**: a huge, lush reverb with a **Freeze** button that holds a sound forever (turn a guitar chord into a pad) and **Shimmer** for octave-up sparkle. | ![Halo](docs/halo.png) |
 | **Glitch**: tempo-synced stutters, reverses, tape stops and chops. Every key on your MIDI keyboard is a different effect, or let it glitch by itself. | ![Glitch](docs/glitch.png) |
+| **Rig**: a guitar amp and tone shaper with six styles (Acoustic, Indie, Lo-Fi, Pop Rock, Math Rock and Atmospheric) for your acoustic and electric guitars. | ![Rig](docs/rig.png) |
 
 ## Install on a Mac
 
@@ -112,22 +113,48 @@ works. Hold a key to glitch, let go to return to normal.
   blends it with the original.
 - Everything locks to your song's tempo.
 
+### Rig
+
+Plug your guitar into your audio interface, put Rig on that audio track and set the track's
+**Monitor** to **In** so you can hear yourself. Pick a style: clicking one moves all the knobs to
+a good starting point for it, then tweak to taste. Aim for the **IN** meter to peak around -12;
+if it's much quieter or louder, adjust the input gain on your interface.
+
+| Style | Sound | Inspired by |
+|---|---|---|
+| **Acoustic** | For acoustic guitar (mic or pickup): fuller body, less pickup "quack", a little air, gentle compression and a small room | Lizzy McAlpine, Phoebe Bridgers, Jake Minch, Tiny Habits |
+| **Indie** | Sparkly clean amp that breaks up when you dig in, chorus, slapback echo, bright reverb | Phoebe Bridgers, Dominic Fike |
+| **Lo-Fi** | Squashed, boxy and dusty with tape wow & flutter on the Mod knob | Mk.gee, Dijon |
+| **Pop Rock** | Tight high-gain amp through a 4x12 cab, crunch to fuzz, wide double-tracked spread | underscores, brakence |
+| **Math Rock** | Glassy, compressed clean with headroom for tapping and twinkly riffs, dotted-eighth echo | brakence's midwest-emo side |
+| **Atmospheric** | Volume swells, deep slow chorus, dotted-eighth echoes, huge shimmering reverb | Bon Iver, Novo Amor, Porter Robinson |
+
+- **Amp**: **Gate** cuts hum between notes (useful for Pop Rock), **Comp** evens out your playing
+  and adds sustain, **Drive** goes from clean to distorted (how far depends on the style),
+  **Bass/Mid/Treble** shape the tone, and **Output** sets the final level.
+- **Effects**: **Swell** fades each note in, like rolling up your volume knob after picking.
+  **Mod**, **Echo** and **Reverb** change character with the style: the line above the knobs
+  says what they do in the style you're using. Echoes lock to your song's tempo.
+- The styles are tuned by ear to suggest those artists' sounds, not copies of anyone's actual
+  gear. Every guitar and pickup is different, so expect to adjust Drive and the tone knobs.
+
 ## For developers
 
 The plugins are written in Rust with [nih-plug](https://github.com/robbert-vdh/nih-plug) and
 [egui](https://github.com/emilk/egui).
 
 ```
-crates/olo_dsp    shared DSP: delay lines, filters, smoothing, pitch shifter
+crates/olo_dsp    shared DSP: delay lines, filters, smoothing, pitch shifter, oversampling, reverb
 crates/olo_ui     shared look and widgets (knobs, toggles, selectors)
 plugins/halo      reverb: 8-channel diffuser + Householder feedback delay network
 plugins/glitch    tempo-synced history-buffer effects
 plugins/prism     YIN pitch detection + TD-PSOLA harmonizer
+plugins/rig       guitar amp: dynamics, 4x oversampled preamp, tone stack, cab sim, effects
 ```
 
 ```sh
 cargo test --workspace --release                       # DSP unit tests
-cargo xtask bundle -p halo -p glitch -p prism --release   # builds into target/bundled
+cargo xtask bundle -p halo -p glitch -p prism -p rig --release   # builds into target/bundled
 cargo run -p halo --features standalone --bin halo_standalone   # preview a GUI without a DAW
 ```
 

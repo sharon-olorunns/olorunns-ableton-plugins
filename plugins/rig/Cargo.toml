@@ -1,0 +1,26 @@
+[package]
+name = "rig"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+# cdylib for the plugin itself, lib so the tests and standalone binary can use it
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "rig_standalone"
+path = "src/main.rs"
+required-features = ["standalone"]
+
+[features]
+# Builds a standalone app, only used for previewing the GUI during development
+standalone = ["nih_plug/standalone"]
+
+[dependencies]
+nih_plug.workspace = true
+nih_plug_egui.workspace = true
+olo_dsp.workspace = true
+olo_ui.workspace = true

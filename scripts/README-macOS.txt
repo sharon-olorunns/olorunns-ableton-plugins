@@ -4,6 +4,7 @@ OLORUNNS PLUGINS FOR ABLETON LIVE
 Halo   - huge reverb with a freeze button and shimmer
 Glitch - stutters, reverses and tape stops, played from your MIDI keyboard
 Prism  - sing one note, hold a chord, and your voice sings the chord
+Rig    - guitar amp and tone shaper with six styles
 
 
 INSTALL

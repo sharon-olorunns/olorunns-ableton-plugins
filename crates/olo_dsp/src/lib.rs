@@ -5,7 +5,9 @@
 
 pub mod delay;
 pub mod filter;
+pub mod oversample;
 pub mod pitch;
+pub mod reverb;
 pub mod smooth;
 
 pub use delay::DelayLine;

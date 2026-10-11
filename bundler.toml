@@ -8,3 +8,6 @@ name = "Glitch"
 
 [prism]
 name = "Prism"
+
+[rig]
+name = "Rig"
