@@ -1,0 +1,10 @@
+# Plugin display names for `cargo xtask bundle`.
+
+[halo]
+name = "Halo"
+
+[glitch]
+name = "Glitch"
+
+[prism]
+name = "Prism"

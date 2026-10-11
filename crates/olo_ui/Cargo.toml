@@ -1,0 +1,10 @@
+[package]
+name = "olo_ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+nih_plug.workspace = true
+nih_plug_egui.workspace = true
