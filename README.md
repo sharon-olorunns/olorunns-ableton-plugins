@@ -5,7 +5,7 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 
 | | |
 |---|---|
-| **Prism**: sing one note, hold a chord on your keyboard, and your voice sings the chord (think Bon Iver's "715 - CRΣΣKS"). An auto mode adds in-key harmonies without a keyboard. | ![Prism](docs/prism.png) |
+| **Prism**: sing one note, hold a chord on your keyboard, and your voice sings the chord (think Imogen Heap's "Hide and Seek" or Bon Iver's "715 - CRΣΣKS"). An auto mode adds in-key harmonies without a keyboard, and Live mode lets you sing through it with almost no delay. | ![Prism](docs/prism.png) |
 | **Halo**: a huge, lush reverb with a **Freeze** button that holds a sound forever (turn a guitar chord into a pad) and **Shimmer** for octave-up sparkle. | ![Halo](docs/halo.png) |
 | **Glitch**: tempo-synced stutters, reverses, tape stops and chops. Every key on your MIDI keyboard is a different effect, or let it glitch by itself. | ![Glitch](docs/glitch.png) |
 
@@ -49,6 +49,13 @@ You can also draw or record MIDI clips on that MIDI track, and the plugin will f
 
 ### Prism
 
+**For the "Hide and Seek" sound:** click the **Hide & Seek** preset, hold 3-4 note chords on your
+keyboard and sing long, steady notes. Only the harmonies come out (Dry is at 0%), so your voice
+becomes the chord. Turn on **Live mode** if you're singing through it in real time.
+
+- **Presets**: **Hide & Seek** (harmonies only, perfectly in tune), **Robot choir** (your voice
+  plus hard-tuned harmonies) and **Natural choir** (soft, human-sounding backing voices). They're
+  starting points: tweak any knob afterwards.
 - **Play chords** mode: hold a chord while you sing (or while a recorded vocal plays) and each
   note of the chord becomes a copy of your voice. Up to 6 notes.
 - **Auto harmony** mode: no keyboard needed. Set **Key** and **Major/Minor** to match your song
@@ -61,9 +68,15 @@ You can also draw or record MIDI clips on that MIDI track, and the plugin will f
 - **Spread** pans the voices across the stereo field. **Attack** and **Release** shape how
   voices fade in and out when you press and let go of keys.
 
-Prism works best on a solo, dry vocal (one voice, not a whole mix). It needs about 50 ms to
-analyse your voice. Ableton compensates for this automatically on playback, but you'll hear the
-delay if you monitor yourself through it while recording, so record dry and add Prism afterwards.
+Prism works best on a solo, dry vocal (one voice, not a whole mix).
+
+**Live mode** is for singing through Prism in real time, for example to perform or to record the
+harmonies as you sing. With it off (the default), Prism looks about 50 ms ahead for the smoothest
+result. Ableton compensates for this on playback, so that's best for recorded vocals, but you'd
+hear the delay while singing. With Live mode on there's no added delay. Your dry voice comes
+straight through and the harmonies follow about 10-20 ms behind (closer for higher voices), like a
+hardware harmonizer. Use headphones when singing live so the speakers don't feed back into the
+mic.
 
 ### Halo
 

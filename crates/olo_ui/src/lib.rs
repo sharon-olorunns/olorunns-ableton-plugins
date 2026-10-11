@@ -408,3 +408,43 @@ pub fn stepper<P: Param>(
     }
     response.on_hover_text("Click for next, right-click for previous")
 }
+
+/// A small rounded button, filled with the accent colour when `selected`.
+pub fn pill_button(
+    ui: &mut Ui,
+    theme: &Theme,
+    label: &str,
+    selected: bool,
+    width: f32,
+) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 26.0), Sense::click());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let radius = CornerRadius::same(13);
+        if selected {
+            painter.rect_filled(rect, radius, theme.accent);
+        } else {
+            painter.rect_filled(rect, radius, theme.track);
+            if response.hovered() {
+                painter.rect_stroke(
+                    rect,
+                    radius,
+                    Stroke::new(1.0_f32, theme.accent),
+                    StrokeKind::Inside,
+                );
+            }
+        }
+        painter.text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            label,
+            FontId::proportional(12.5),
+            if selected {
+                theme.background
+            } else {
+                theme.text
+            },
+        );
+    }
+    response
+}

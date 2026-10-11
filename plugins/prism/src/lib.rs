@@ -31,6 +31,11 @@ pub struct Prism {
     params: Arc<PrismParams>,
     shared: Arc<Shared>,
     engine: Option<PrismEngine>,
+    /// The latency last reported to the host, so we only report changes.
+    reported_latency: u32,
+    /// Whether Live mode was on when the plugin was last activated. CLAP only allows latency
+    /// changes during activation, so there Live mode switches over on the next activation.
+    live_at_activation: bool,
 }
 
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,6 +114,8 @@ pub struct PrismParams {
     pub dry: FloatParam,
     #[id = "harmony"]
     pub harmony: FloatParam,
+    #[id = "live"]
+    pub live: BoolParam,
 }
 
 fn percent_param(name: &str, default: f32) -> FloatParam {
@@ -140,7 +147,7 @@ fn ms_param(name: &str, default: f32, min: f32, max: f32) -> FloatParam {
 impl Default for PrismParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(720, 400),
+            editor_state: EguiState::from_size(720, 436),
             mode: EnumParam::new("Mode", ModeParam::Keys),
             key: EnumParam::new("Key", KeyParam::C),
             scale: EnumParam::new("Scale", ScaleParam::Major),
@@ -174,6 +181,7 @@ impl Default for PrismParams {
             release: ms_param("Release", 250.0, 10.0, 2000.0),
             dry: percent_param("Dry", 0.8),
             harmony: percent_param("Harmony", 0.8),
+            live: BoolParam::new("Live mode", false),
         }
     }
 }
@@ -184,6 +192,8 @@ impl Default for Prism {
             params: Arc::new(PrismParams::default()),
             shared: Arc::new(Shared::default()),
             engine: None,
+            reported_latency: 0,
+            live_at_activation: false,
         }
     }
 }
@@ -214,6 +224,7 @@ impl PrismParams {
             release_ms: self.release.value(),
             dry: self.dry.value(),
             harmony: self.harmony.value(),
+            live: self.live.value(),
         }
     }
 }
@@ -260,7 +271,9 @@ impl Plugin for Prism {
     ) -> bool {
         let mut engine = PrismEngine::new(buffer_config.sample_rate);
         engine.set(&self.params.settings());
-        context.set_latency_samples(engine.latency() as u32);
+        self.live_at_activation = self.params.live.value();
+        self.reported_latency = engine.latency() as u32;
+        context.set_latency_samples(self.reported_latency);
         self.engine = Some(engine);
         true
     }
@@ -280,7 +293,18 @@ impl Plugin for Prism {
         let Some(engine) = &mut self.engine else {
             return ProcessStatus::Normal;
         };
-        engine.set(&self.params.settings());
+        let mut settings = self.params.settings();
+        if context.plugin_api() == PluginApi::Clap {
+            settings.live = self.live_at_activation;
+        }
+        engine.set(&settings);
+        // Live mode changes the latency, so let the host know when it's switched. VST3 hosts
+        // like Ableton handle this at any time.
+        let latency = engine.latency() as u32;
+        if latency != self.reported_latency {
+            self.reported_latency = latency;
+            context.set_latency_samples(latency);
+        }
 
         let mut next_event = context.next_event();
         for (i, mut frame) in buffer.iter_samples().enumerate() {

@@ -1,13 +1,105 @@
 use crate::{ModeParam, PrismParams, Shared};
-use nih_plug::prelude::Editor;
+use nih_plug::prelude::{Editor, Param, ParamSetter};
 use nih_plug_egui::create_egui_editor;
 use olo_dsp::note_name;
 use olo_ui::egui::{self, epaint::PathStroke, Align2, Color32, FontId, Pos2, Sense, Shape, Vec2};
-use olo_ui::{caption, header, knob, knob_centered, segmented, stepper, Theme};
+use olo_ui::{
+    caption, header, knob, knob_centered, pill_button, segmented, stepper, toggle_button, Theme,
+};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 const KNOB: f32 = 62.0;
+
+/// A starting point for a sound. Presets only touch the controls that define the sound, so the
+/// key and voicing settings are left alone.
+struct Preset {
+    name: &'static str,
+    description: &'static str,
+    mode: Option<ModeParam>,
+    dry: f32,
+    harmony: f32,
+    tune: f32,
+    formant: f32,
+    spread: f32,
+    attack: f32,
+    release: f32,
+}
+
+const PRESETS: [Preset; 3] = [
+    Preset {
+        name: "Hide & Seek",
+        description:
+            "Only the harmonies, perfectly in tune, like Imogen Heap's \"Hide and Seek\". \
+                      Hold chords and sing long notes",
+        mode: Some(ModeParam::Keys),
+        dry: 0.0,
+        harmony: 1.0,
+        tune: 1.0,
+        formant: 0.0,
+        spread: 0.7,
+        attack: 5.0,
+        release: 400.0,
+    },
+    Preset {
+        name: "Robot choir",
+        description: "Your voice plus hard-tuned, robotic harmonies",
+        mode: Some(ModeParam::Keys),
+        dry: 0.6,
+        harmony: 0.9,
+        tune: 1.0,
+        formant: 0.0,
+        spread: 0.85,
+        attack: 10.0,
+        release: 250.0,
+    },
+    Preset {
+        name: "Natural choir",
+        description: "Softer, human-sounding backing voices that keep your natural wobble",
+        mode: None,
+        dry: 1.0,
+        harmony: 0.6,
+        tune: 0.25,
+        formant: 0.0,
+        spread: 0.9,
+        attack: 40.0,
+        release: 600.0,
+    },
+];
+
+fn set<P: Param>(setter: &ParamSetter, param: &P, value: P::Plain) {
+    setter.begin_set_parameter(param);
+    setter.set_parameter(param, value);
+    setter.end_set_parameter(param);
+}
+
+impl Preset {
+    fn apply(&self, params: &PrismParams, setter: &ParamSetter) {
+        if let Some(mode) = self.mode {
+            set(setter, &params.mode, mode);
+        }
+        set(setter, &params.dry, self.dry);
+        set(setter, &params.harmony, self.harmony);
+        set(setter, &params.tune, self.tune);
+        set(setter, &params.formant, self.formant);
+        set(setter, &params.spread, self.spread);
+        set(setter, &params.attack, self.attack);
+        set(setter, &params.release, self.release);
+    }
+
+    /// Whether the current settings are (still) this preset.
+    fn is_active(&self, params: &PrismParams) -> bool {
+        let close = |a: f32, b: f32, tolerance: f32| (a - b).abs() <= tolerance;
+        self.mode.is_none_or(|m| params.mode.value() == m)
+            && close(params.dry.value(), self.dry, 0.01)
+            && close(params.harmony.value(), self.harmony, 0.01)
+            && close(params.tune.value(), self.tune, 0.01)
+            && close(params.formant.value(), self.formant, 0.05)
+            && close(params.spread.value(), self.spread, 0.01)
+            && close(params.attack.value(), self.attack, 0.5)
+            && close(params.release.value(), self.release, 1.0)
+    }
+}
 
 pub fn create(params: Arc<PrismParams>, shared: Arc<Shared>) -> Option<Box<dyn Editor>> {
     let theme = Theme::new(Color32::from_rgb(0xa9, 0x8b, 0xff));
@@ -21,6 +113,35 @@ pub fn create(params: Arc<PrismParams>, shared: Arc<Shared>) -> Option<Box<dyn E
                 .frame(theme.frame())
                 .show(ctx, |ui| {
                     header(ui, &theme, "Prism", "sing one note, play a chord, become a choir");
+                    ui.add_space(6.0);
+
+                    ui.horizontal(|ui| {
+                        caption(ui, &theme, "PRESETS");
+                        ui.add_space(4.0);
+                        for preset in &PRESETS {
+                            let active = preset.is_active(&params);
+                            if pill_button(ui, &theme, preset.name, active, 112.0)
+                                .on_hover_text(preset.description)
+                                .clicked()
+                            {
+                                preset.apply(&params, setter);
+                            }
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            toggle_button(
+                                ui,
+                                &theme,
+                                &params.live,
+                                setter,
+                                "LIVE MODE",
+                                Vec2::new(116.0, 26.0),
+                            )
+                            .on_hover_text(
+                                "Turn on to sing through Prism live: almost no delay. \
+                                 Leave off for recorded vocals (smoothest sound)",
+                            );
+                        });
+                    });
                     ui.add_space(8.0);
 
                     ui.horizontal_top(|ui| {

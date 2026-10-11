@@ -7,8 +7,11 @@
 //!    voice's formants (its "vowel" character) stay put, which is what makes it sound like a choir
 //!    of the same singer rather than chipmunks.
 //!
-//! The output is delayed by a fixed latency so grains can look a little into the "future"; the
-//! plugin reports this to the host so everything stays in time.
+//! In studio mode the output is delayed by a fixed latency so grains can look a little into the
+//! "future"; the plugin reports this to the host so everything stays in time. Live mode has no
+//! latency at all: each voice re-uses the most recent complete vocal periods instead, so the
+//! harmonies trail the voice by a couple of periods (a few milliseconds), like a hardware
+//! harmonizer.
 
 use crate::detector::{PitchDetector, PitchFrame, MIN_F0};
 use olo_dsp::delay::HistoryBuffer;
@@ -85,6 +88,8 @@ pub struct Settings {
     pub release_ms: f32,
     pub dry: f32,
     pub harmony: f32,
+    /// Zero-latency mode for singing through the plugin live.
+    pub live: bool,
 }
 
 impl Default for Settings {
@@ -101,6 +106,7 @@ impl Default for Settings {
             release_ms: 250.0,
             dry: 0.8,
             harmony: 0.8,
+            live: false,
         }
     }
 }
@@ -122,6 +128,7 @@ struct Grain {
     out_center: f64,
     half: f32,
     rate: f32,
+    gain: f32,
 }
 
 /// A raised-cosine window lookup: `hann(x)` for `x` in `[-1, 1]`.
@@ -225,6 +232,7 @@ pub struct PrismEngine {
     sample_rate: f32,
     settings: Settings,
     latency: usize,
+    studio_latency: usize,
     max_period: f32,
     unvoiced_step: f32,
 
@@ -278,6 +286,7 @@ impl PrismEngine {
             sample_rate,
             settings: Settings::default(),
             latency,
+            studio_latency: latency,
             max_period,
             unvoiced_step: (sample_rate * 0.005).round(),
             now: 0,
@@ -352,6 +361,23 @@ impl PrismEngine {
         let coeff = |ms: f32, sr: f32| 1.0 - (-1.0 / (ms.max(0.5) * 0.001 * sr)).exp();
         self.attack_coeff = coeff(settings.attack_ms, self.sample_rate);
         self.release_coeff = coeff(settings.release_ms, self.sample_rate);
+
+        if previous.live != settings.live {
+            self.latency = if settings.live {
+                0
+            } else {
+                self.studio_latency
+            };
+            // Grains were scheduled against the old timeline, so start them afresh
+            let t_out = (self.now - self.latency as i64) as f64;
+            for v in &mut self.voices {
+                for g in &mut v.grains {
+                    g.alive = false;
+                }
+                v.next_s = t_out;
+                v.est_half = 0.0;
+            }
+        }
 
         if previous.mode != settings.mode {
             for v in &mut self.voices {
@@ -501,6 +527,11 @@ impl PrismEngine {
 
     /// Place pitch marks for all input that has enough look-ahead available.
     fn generate_marks(&mut self) {
+        // In studio mode marks wait for the longest possible period of look-ahead, which keeps
+        // them aligned with up-to-date pitch analysis. Live mode places each mark as soon as the
+        // peak search has the samples it needs: grains read their input in real time, so the
+        // rest of a grain's period arrives before it's played.
+        let live = self.settings.live;
         let limit = self.now - self.max_period as i64 - 2;
         if self.mark_count == 0 {
             self.last_mark = limit - self.unvoiced_step as i64;
@@ -519,7 +550,12 @@ impl PrismEngine {
                 } else {
                     (period * 0.5) as i64
                 };
-                if candidate + reach > limit {
+                let ready = if live {
+                    candidate + reach + 2 <= self.now
+                } else {
+                    candidate + reach <= limit
+                };
+                if !ready {
                     return;
                 }
                 let lo = (candidate - reach).max(self.last_mark + (period * 0.5) as i64);
@@ -550,7 +586,12 @@ impl PrismEngine {
                 self.last_voiced = true;
             } else {
                 let next = self.last_mark + self.unvoiced_step as i64;
-                if next > limit {
+                let ready = if live {
+                    next + 2 <= self.now
+                } else {
+                    next <= limit
+                };
+                if !ready {
                     return;
                 }
                 self.push_mark(Mark {
@@ -674,8 +715,15 @@ impl PrismEngine {
             while t >= voice.next_s - voice.est_half && guard < 8 {
                 guard += 1;
                 let next_s = voice.next_s;
+                // Live mode has no look-ahead, so the nearest mark is simply the newest one and
+                // sits a couple of periods in the past
+                let max_distance = if self.settings.live {
+                    self.max_period as f64 * 4.0
+                } else {
+                    self.max_period as f64
+                };
                 let mark = nearest_mark(&self.marks, self.mark_head, self.mark_count, next_s)
-                    .filter(|m| (m.pos as f64 - next_s).abs() <= self.max_period as f64);
+                    .filter(|m| (m.pos as f64 - next_s).abs() <= max_distance);
 
                 let Some(mark) = mark else {
                     voice.next_s += self.unvoiced_step as f64;
@@ -691,6 +739,13 @@ impl PrismEngine {
                         out_center: next_s,
                         half: mark.period,
                         rate,
+                        // Live mode notices new notes a little late, so keep the unpitched
+                        // (unvoiced) grains in between soft to avoid a blip of the sung pitch
+                        gain: if mark.voiced || !self.settings.live {
+                            1.0
+                        } else {
+                            0.35
+                        },
                     };
                 }
 
@@ -727,7 +782,7 @@ impl PrismEngine {
                 }
                 let w = self.window.at(u / g.half);
                 let pos = (g.in_center + u as f64).min(self.now as f64);
-                acc += self.input.get_linear(pos) * w;
+                acc += self.input.get_linear(pos) * w * g.gain;
                 wsum += w;
             }
             let sample = acc / wsum.max(1.0) * voice.env * voice.velocity;
@@ -953,5 +1008,107 @@ mod tests {
             natural > robotic + 0.25,
             "natural {natural} vs robotic {robotic}"
         );
+    }
+
+    fn live() -> Settings {
+        Settings {
+            live: true,
+            ..harmony_only()
+        }
+    }
+
+    #[test]
+    fn live_mode_has_no_latency_and_keeps_pitch() {
+        let input = voice_like(|_| 220.0, SR as usize * 2);
+        for (note, expected) in [(61u8, 277.18f32), (45, 110.0), (69, 440.0)] {
+            let mut engine = PrismEngine::new(SR);
+            engine.set(&live());
+            assert_eq!(engine.latency(), 0);
+            engine.note_on(note, 1.0);
+            let (l, _) = render(&mut engine, &input);
+            let got = median_pitch(&l[SR as usize / 2..]);
+            let cents = 1200.0 * (got / expected).log2();
+            assert!(
+                cents.abs() < 15.0,
+                "live note {note}: expected {expected} Hz, got {got} Hz"
+            );
+        }
+    }
+
+    #[test]
+    fn live_mode_dry_is_immediate() {
+        let mut engine = PrismEngine::new(SR);
+        engine.set(&Settings {
+            live: true,
+            dry: 1.0,
+            harmony: 0.0,
+            ..Settings::default()
+        });
+        let (l, _) = engine.process(0.5, 0.5);
+        assert_eq!(l, 0.5);
+    }
+
+    #[test]
+    fn live_mode_harmonies_follow_quickly() {
+        // Silence, then a note starts. The harmony should be sounding within ~40 ms.
+        let start = SR as usize / 2;
+        let mut input = vec![0.0; start];
+        input.extend(voice_like(|_| 196.0, SR as usize));
+        let mut engine = PrismEngine::new(SR);
+        engine.set(&live());
+        engine.note_on(64, 1.0);
+        let (l, _) = render(&mut engine, &input);
+        let steady = (l[start + 24_000..start + 28_800]
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            / 4800.0)
+            .sqrt();
+        let window = 480; // 10 ms
+        let onset = (start..l.len() - window)
+            .step_by(window)
+            .find(|&i| {
+                let rms =
+                    (l[i..i + window].iter().map(|x| x * x).sum::<f32>() / window as f32).sqrt();
+                rms > steady * 0.5
+            })
+            .expect("harmony never started");
+        let delay_ms = (onset - start) as f32 / SR * 1000.0;
+        assert!(delay_ms < 40.0, "harmony took {delay_ms} ms to start");
+        let got = median_pitch(&l[start + 12_000..]);
+        assert!(
+            (1200.0 * (got / 329.63).log2()).abs() < 15.0,
+            "got {got} Hz"
+        );
+    }
+
+    #[test]
+    fn live_mode_level_and_stability() {
+        let input = voice_like(|_| 220.0, SR as usize * 2);
+        let rms = |s: &[f32]| (s.iter().map(|x| x * x).sum::<f32>() / s.len() as f32).sqrt();
+        let mut engine = PrismEngine::new(SR);
+        engine.set(&live());
+        engine.note_on(64, 1.0);
+        engine.note_on(57, 1.0);
+        let (l, r) = render(&mut engine, &input);
+        let out: Vec<f32> = l.iter().zip(&r).map(|(a, b)| (a + b) * 0.5).collect();
+        let ratio_db = 20.0 * (rms(&out[SR as usize..]) / rms(&input[SR as usize..])).log10();
+        assert!(ratio_db.abs() < 6.0, "live harmony level {ratio_db} dB");
+
+        // Switching modes back and forth while playing must stay clean
+        let mut engine = PrismEngine::new(SR);
+        engine.note_on(60, 1.0);
+        let mut rng = Rng::new(4);
+        for (i, x) in input.iter().enumerate() {
+            if i % 9_000 == 0 {
+                engine.set(&Settings {
+                    live: (i / 9_000) % 2 == 0,
+                    formant: rng.bipolar() * 6.0,
+                    ..Settings::default()
+                });
+            }
+            let (a, b) = engine.process(*x, *x);
+            assert!(a.is_finite() && b.is_finite() && a.abs() < 3.0 && b.abs() < 3.0);
+        }
     }
 }
