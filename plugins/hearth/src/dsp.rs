@@ -190,20 +190,20 @@ impl Sound {
         match self {
             Sound::Kick => 0.75,
             Sound::Rim => 0.32,
-            Sound::BrushTap => 0.36,
+            Sound::BrushTap => 0.26,
             Sound::Clap => 0.55,
-            Sound::BrushSlap => 0.33,
+            Sound::BrushSlap => 0.24,
             Sound::LowTom => 0.44,
             Sound::HighTom => 0.5,
             Sound::HatClosed => 0.32,
             Sound::HatOpen => 0.25,
             Sound::Shaker => 0.14,
-            Sound::Swirl => 0.16,
+            Sound::Swirl => 0.12,
             Sound::Tambourine => 0.09,
             Sound::Snap => 0.4,
             Sound::Swell => 0.4,
             Sound::Stomp => 0.66,
-            Sound::Ride => 0.16,
+            Sound::Ride => 0.24,
         }
     }
 }
@@ -469,6 +469,10 @@ struct Voice {
     /// Swirl circle position (0..1) and whether this voice swirls.
     swirl: bool,
     swirl_phase: f32,
+    /// Optional gentle low-pass over the whole voice (two stages, 24 dB/octave) to take the
+    /// fizz off brushes.
+    lowpass: [Svf; 2],
+    lowpass_on: bool,
     counter: u32,
 }
 
@@ -575,6 +579,15 @@ impl Voice {
         self.noise[index].env.delay = (ms * 0.001 * hit.sample_rate) as u32;
     }
 
+    /// Roll off everything above `cutoff` (scaled by brightness) for a softer, rounder sound.
+    fn soften(&mut self, hit: &Hit, cutoff: f32) {
+        let cutoff = (cutoff * hit.bright.sqrt()).clamp(1000.0, hit.sample_rate * 0.45);
+        for f in &mut self.lowpass {
+            f.set(cutoff, 0.6, hit.sample_rate);
+        }
+        self.lowpass_on = true;
+    }
+
     fn hold_noise(&mut self, index: usize, hit: &Hit, release_ms: f32) {
         let env = &mut self.noise[index].env;
         env.decay = -decay_coeff(release_ms, hit.sample_rate);
@@ -637,36 +650,46 @@ impl Voice {
                 );
             }
             Sound::BrushTap => {
-                // Brush bristles hitting the snare: grainy, breathy, with a little drum underneath
-                let i = self.add_noise(hit, FilterKind::Band, 3200.0 * tn, 0.7, 0.9, 1.5, 55.0);
-                self.beads(i, hit, 9000.0, 0.35);
-                self.add_noise(hit, FilterKind::High, 6000.0 * tn, 0.7, 0.3, 1.0, 28.0);
+                // Brush bristles landing on the snare. Mostly the drum answering: a soft thud,
+                // the head, a smooth "tsh" and the wires, with the fizz rolled off.
+                let i = self.add_noise(hit, FilterKind::Band, 1900.0 * tn, 0.5, 0.75, 4.0, 60.0);
+                self.beads(i, hit, 14000.0, 0.8);
+                self.add_noise(hit, FilterKind::Band, 3400.0 * tn, 0.7, 0.16, 3.0, 32.0);
                 // Snare wires buzzing on after the hit
-                self.add_noise(hit, FilterKind::Band, 1900.0 * tn, 0.8, 0.22, 3.0, 165.0);
-                self.add_mode(hit, 188.0 * t, 0.22 * (0.4 + v), 1.0, 45.0);
-                self.add_mode(hit, 331.0 * t, 0.09, 1.0, 28.0);
+                self.add_noise(hit, FilterKind::Band, 2500.0 * tn, 0.6, 0.15, 6.0, 140.0);
+                // The brush landing on the head
+                self.add_noise(hit, FilterKind::Low, 420.0 * tn, 0.7, 0.22, 2.0, 18.0);
+                self.add_mode(hit, 186.0 * t, 0.3 * (0.5 + v), 2.0, 60.0);
+                self.add_mode(hit, 291.0 * t, 0.13, 2.0, 40.0);
+                self.add_mode(hit, 418.0 * t, 0.05, 2.0, 25.0);
+                self.soften(hit, 9000.0);
             }
             Sound::BrushSlap => {
-                // The whole brush slapped flat: louder, wider and with more drum
-                let i = self.add_noise(hit, FilterKind::Band, 2600.0 * tn, 0.6, 1.0, 0.5, 85.0);
-                self.beads(i, hit, 14000.0, 0.3);
-                self.add_noise(hit, FilterKind::High, 5500.0 * tn, 0.7, 0.45, 0.3, 42.0);
-                self.add_noise(hit, FilterKind::Band, 2000.0 * tn, 0.7, 0.32, 2.0, 250.0);
-                self.add_mode(hit, 184.0 * t, 0.5, 0.5, 70.0);
-                self.add_mode(hit, 305.0 * t, 0.18, 0.5, 40.0);
+                // The whole brush slapped flat: louder, fuller and with more drum
+                let i = self.add_noise(hit, FilterKind::Band, 1700.0 * tn, 0.45, 0.9, 2.0, 90.0);
+                self.beads(i, hit, 18000.0, 0.9);
+                self.add_noise(hit, FilterKind::Band, 3200.0 * tn, 0.7, 0.22, 1.5, 45.0);
+                self.add_noise(hit, FilterKind::Band, 2300.0 * tn, 0.6, 0.24, 4.0, 220.0);
+                self.add_noise(hit, FilterKind::Low, 380.0 * tn, 0.7, 0.32, 1.0, 24.0);
+                self.add_mode(hit, 182.0 * t, 0.55, 1.0, 75.0);
+                self.add_mode(hit, 299.0 * t, 0.2, 1.0, 45.0);
+                self.add_mode(hit, 425.0 * t, 0.07, 1.0, 28.0);
+                self.soften(hit, 10000.0);
             }
             Sound::Swirl => {
-                // A brush circling on the head. The swirl LFO moves level, brightness and pan.
-                let i = self.add_noise(hit, FilterKind::Band, 2500.0 * tn, 0.6, 0.55, 140.0, 0.0);
-                self.beads(i, hit, 7000.0, 0.45);
+                // A brush circling on the head: a soft, smooth "shhh". The swirl LFO moves level,
+                // brightness and pan.
+                let i = self.add_noise(hit, FilterKind::Band, 1500.0 * tn, 0.45, 0.55, 140.0, 0.0);
+                self.beads(i, hit, 14000.0, 1.1);
                 self.hold_noise(i, hit, 280.0);
-                let j = self.add_noise(hit, FilterKind::High, 5200.0 * tn, 0.7, 0.18, 140.0, 0.0);
+                let j = self.add_noise(hit, FilterKind::Band, 2900.0 * tn, 0.7, 0.13, 140.0, 0.0);
                 self.hold_noise(j, hit, 280.0);
                 self.swirl = true;
                 // Attack shouldn't depend on softness for the swirl
                 for n in &mut self.noise[..2] {
                     n.env.attack_inc = 1.0 / (0.14 * hit.sample_rate);
                 }
+                self.soften(hit, 7500.0);
             }
             Sound::Clap => {
                 // A few hands, slightly out of time, then the room
@@ -742,7 +765,8 @@ impl Voice {
                 }
                 let i = self.add_noise(hit, FilterKind::Band, 5200.0 * tn, 0.5, 0.4, 4.0, 900.0);
                 self.beads(i, hit, 6000.0, 0.8);
-                self.add_noise(hit, FilterKind::High, 8000.0 * tn, 0.7, 0.22, 2.0, 380.0);
+                self.add_noise(hit, FilterKind::Band, 6500.0 * tn, 0.6, 0.12, 2.0, 380.0);
+                self.soften(hit, 9000.0);
             }
             Sound::Swell => {
                 // Soft mallets rolling on a cymbal: grows over two beats, then rings out
@@ -861,7 +885,7 @@ impl Voice {
             pan += 0.22 * c;
             if self.counter.is_multiple_of(16) {
                 // Brighter on the push stroke, darker on the pull
-                let tilt = 2f32.powf(0.45 * sin_turns((self.swirl_phase + 0.12).fract()));
+                let tilt = 2f32.powf(0.3 * sin_turns((self.swirl_phase + 0.12).fract()));
                 for n in &mut self.noise[..self.noise_count] {
                     n.filter.set(n.cutoff * tilt, n.q, sample_rate);
                 }
@@ -897,6 +921,10 @@ impl Voice {
             out += y * n.amp * e;
         }
 
+        if self.lowpass_on {
+            let first = self.lowpass[0].process(out, FilterKind::Low);
+            out = self.lowpass[1].process(first, FilterKind::Low);
+        }
         out *= self.gain * self.fade * swirl_level;
         self.fade *= self.fade_decay;
 
