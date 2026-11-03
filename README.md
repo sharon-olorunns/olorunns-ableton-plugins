@@ -1,6 +1,6 @@
 # Olorunns Plugins
 
-Four plugins for Ableton Live, made for experimenting with indie-folk and hyperpop sounds.
+Five plugins for Ableton Live, made for experimenting with indie-folk and hyperpop sounds.
 They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standard and Suite).
 
 | | |
@@ -9,6 +9,7 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 | **Halo**: a huge, lush reverb with a **Freeze** button that holds a sound forever (turn a guitar chord into a pad) and **Shimmer** for octave-up sparkle. | ![Halo](docs/halo.png) |
 | **Glitch**: tempo-synced stutters, reverses, tape stops and chops. Every key on your MIDI keyboard is a different effect, or let it glitch by itself. | ![Glitch](docs/glitch.png) |
 | **Rig**: a guitar amp and tone shaper with six styles (Acoustic, Indie, Lo-Fi, Pop Rock, Math Rock and Atmospheric) for your acoustic and electric guitars. | ![Rig](docs/rig.png) |
+| **Hearth**: a soft, natural drum kit for folk and indie songs: brushes, felt mallets, shaker, tambourine and a warm wooden room. For when you want percussion that sits gently under the song. | |
 
 ## Install on a Mac
 
@@ -24,8 +25,9 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 3. In Ableton Live go to **Settings > Plug-Ins** (called Preferences in older versions), turn on
    **Use VST3 Plug-In System Folders**, and click **Rescan**.
 
-The plugins appear in Ableton's browser under **Plug-Ins > Olorunns**. Drag them onto a track like
-any other effect.
+The plugins appear in Ableton's browser under **Plug-Ins > Olorunns**. Drag Halo, Glitch, Prism
+or Rig onto a track like any other effect. Hearth is an instrument: drag it onto an empty MIDI
+track.
 
 **Why the Terminal step?** macOS blocks downloaded plugins that haven't been notarized by Apple
 (which needs a paid developer account). The install script copies the plugins to
@@ -138,6 +140,57 @@ if it's much quieter or louder, adjust the input gain on your interface.
 - The styles are tuned by ear to suggest those artists' sounds, not copies of anyone's actual
   gear. Every guitar and pickup is different, so expect to adjust Drive and the tone knobs.
 
+### Hearth
+
+Hearth is a drum kit you play from MIDI, like a Drum Rack. Drag it onto a MIDI track, then play
+your keyboard or pads, or draw notes into a clip. Every sound is synthesized when you hit it, and
+each hit is slightly different, so it never sounds like the same sample over and over.
+
+The sixteen pads use the same notes as a Drum Rack (C1 to D#2), so pad controllers and drum MIDI
+files line up:
+
+| Note | Sound | | Note | Sound |
+|---|---|---|---|---|
+| C1 | Kick (felt beater) | | G#1 | Shaker |
+| C#1 | Rim (cross-stick) | | A1 | **Swirl** (hold) |
+| D1 | Brush tap | | A#1 | Open hat |
+| D#1 | Clap | | B1 | Tambourine |
+| E1 | Brush slap (accent) | | C2 | Finger snap |
+| F1 | Low tom (felt mallet) | | C#2 | Cymbal swell |
+| F#1 | Closed hat | | D2 | Foot stomp |
+| G1 | High tom (felt mallet) | | D#2 | Brushed ride |
+
+Any other note plays the sound for its key name from the first octave (any C is the kick, any D
+the brush tap, any F# the hat), so a small keyboard works too. You can also click the pads on
+screen.
+
+- **Swirl** is a brush circling on the snare, the classic jazz and folk brush sound. It keeps
+  going for as long as you hold the note, making one circle per beat in time with your song.
+  Hold it under a whole bar and tap Brush on 2 and 4.
+- **Swell** is a cymbal rolled with soft mallets that grows over two beats. Start it two beats
+  before a chorus.
+- The closed hat cuts off the open hat, like a real hi-hat.
+
+**Feel**
+
+- **Softness**: from firmer hits to very soft felt and brushes. It slows the attacks, darkens
+  the sound and takes the click out of the kick and toms.
+- **Tone**: darker or brighter, like moving the mics.
+- **Human**: tiny random changes in timing, level, pitch and colour between hits, like a real
+  drummer. Turn it to 0% for a tighter, programmed feel.
+- **Dynamics**: how much harder hits get louder (and brighter). Lower it if your MIDI keyboard
+  is hard to play evenly.
+- **Tune** the whole kit up or down, **Room** adds a small wooden room around it, and **Width**
+  spreads it out from the drummer's seat (hats on the left, ride on the right).
+
+**Mix**: level knobs for **Kick** (kick and stomp), **Snare** (brushes, swirl, rim, clap and
+snap), **Toms**, **Cymbals** (hats, ride and swell) and **Perc** (shaker and tambourine). Turn one
+all the way down to switch it off. **Output** sets the overall level.
+
+**Getting the folk sound:** start with just Kick on 1 and 3, Brush on 2 and 4 and Swirl held
+underneath, at a velocity of around 60-90. Add Shaker on the off-beats if the song needs to move.
+For something even gentler, turn Softness up and put a little more Room on.
+
 ## For developers
 
 The plugins are written in Rust with [nih-plug](https://github.com/robbert-vdh/nih-plug) and
@@ -150,11 +203,12 @@ plugins/halo      reverb: 8-channel diffuser + Householder feedback delay networ
 plugins/glitch    tempo-synced history-buffer effects
 plugins/prism     YIN pitch detection + TD-PSOLA harmonizer
 plugins/rig       guitar amp: dynamics, 4x oversampled preamp, tone stack, cab sim, effects
+plugins/hearth    drum synth: modal partials + beaded filtered noise per hit, room reverb
 ```
 
 ```sh
 cargo test --workspace --release                       # DSP unit tests
-cargo xtask bundle -p halo -p glitch -p prism -p rig --release   # builds into target/bundled
+cargo xtask bundle -p halo -p glitch -p prism -p rig -p hearth --release   # into target/bundled
 cargo run -p halo --features standalone --bin halo_standalone   # preview a GUI without a DAW
 ```
 

@@ -13,7 +13,7 @@ defaults:
     shell: bash
 
 env:
-  PLUGINS: -p halo -p glitch -p prism -p rig
+  PLUGINS: -p halo -p glitch -p prism -p rig -p hearth
 
 jobs:
   test:

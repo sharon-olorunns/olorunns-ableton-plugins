@@ -5,6 +5,8 @@ Halo   - huge reverb with a freeze button and shimmer
 Glitch - stutters, reverses and tape stops, played from your MIDI keyboard
 Prism  - sing one note, hold a chord, and your voice sings the chord
 Rig    - guitar amp and tone shaper with six styles
+Hearth - soft, natural drum kit: brushes, felt mallets and a warm room
+         (an instrument: put it on a MIDI track)
 
 
 INSTALL

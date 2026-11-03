@@ -11,3 +11,6 @@ name = "Prism"
 
 [rig]
 name = "Rig"
+
+[hearth]
+name = "Hearth"
