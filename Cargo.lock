@@ -509,6 +509,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "closer"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+ "nih_plug_egui",
+ "olo_dsp",
+ "olo_ui",
+]
+
+[[package]]
 name = "cocoa"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

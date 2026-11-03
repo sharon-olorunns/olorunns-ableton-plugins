@@ -7,6 +7,7 @@ Prism  - sing one note, hold a chord, and your voice sings the chord
 Rig    - guitar amp and tone shaper with six styles
 Hearth - soft, natural drum kit: brushes, felt mallets and a warm room
          (an instrument: put it on a MIDI track)
+Closer - intimate vocal reverb with presets for lead and backing vocals
 
 
 INSTALL

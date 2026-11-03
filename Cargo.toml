@@ -9,6 +9,7 @@ members = [
   "plugins/prism",
   "plugins/rig",
   "plugins/hearth",
+  "plugins/closer",
 ]
 
 [workspace.package]

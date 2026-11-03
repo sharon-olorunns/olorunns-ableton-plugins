@@ -1,6 +1,6 @@
 # Olorunns Plugins
 
-Five plugins for Ableton Live, made for experimenting with indie-folk and hyperpop sounds.
+Six plugins for Ableton Live, made for experimenting with indie-folk and hyperpop sounds.
 They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standard and Suite).
 
 | | |
@@ -10,6 +10,7 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 | **Glitch**: tempo-synced stutters, reverses, tape stops and chops. Every key on your MIDI keyboard is a different effect, or let it glitch by itself. | ![Glitch](docs/glitch.png) |
 | **Rig**: a guitar amp and tone shaper with six styles (Acoustic, Indie, Lo-Fi, Pop Rock, Math Rock and Atmospheric) for your acoustic and electric guitars. | ![Rig](docs/rig.png) |
 | **Hearth**: a soft, natural drum kit for folk and indie songs: brushes, felt mallets, shaker, tambourine and a warm wooden room. For when you want percussion that sits gently under the song. | |
+| **Closer**: an intimate vocal reverb that adds warmth and body while keeping the voice close and present, never far away or echoey. It has presets for lead vocals and matching presets for backing vocals, so they sit just behind the lead. | ![Closer](docs/closer.png) |
 
 ## Install on a Mac
 
@@ -25,8 +26,8 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 3. In Ableton Live go to **Settings > Plug-Ins** (called Preferences in older versions), turn on
    **Use VST3 Plug-In System Folders**, and click **Rescan**.
 
-The plugins appear in Ableton's browser under **Plug-Ins > Olorunns**. Drag Halo, Glitch, Prism
-or Rig onto a track like any other effect. Hearth is an instrument: drag it onto an empty MIDI
+The plugins appear in Ableton's browser under **Plug-Ins > Olorunns**. Drag Halo, Glitch, Prism,
+Rig or Closer onto a track like any other effect. Hearth is an instrument: drag it onto an empty MIDI
 track.
 
 **Why the Terminal step?** macOS blocks downloaded plugins that haven't been notarized by Apple
@@ -140,6 +141,58 @@ if it's much quieter or louder, adjust the input gain on your interface.
 - The styles are tuned by ear to suggest those artists' sounds, not copies of anyone's actual
   gear. Every guitar and pickup is different, so expect to adjust Drive and the tone knobs.
 
+### Closer
+
+Closer is a small, warm room for vocals. Most reverbs push a voice further away. Closer adds body
+around it and keeps the singer close, as if they're singing right next to you. Your voice always
+stays at full level and the room is added on top, so turning Mix up never makes the vocal quieter.
+
+**Lead vocal:** put Closer on the vocal track **after** your EQ, compressor and de-esser, and
+click **Close Plate**. Clicking a preset moves all the knobs to a good starting point for it.
+Then tweak to taste.
+
+| Preset | Use it for |
+|---|---|
+| **Close Plate** | Most lead vocals: short, dense and warm |
+| **Booth** | Singer-songwriter, acoustic and lo-fi songs: thick, with almost no tail |
+| **Velvet** | R&B and soul: lush between the lines, dry on the words |
+| **Whisper** | Soft, breathy, close-up singing |
+| **Pop** | A brighter, more forward lead for busy mixes |
+| **Spoken** | Podcasts and voice notes |
+
+**Backing vocals:** these presets use the same kind of room as the lead presets, one step further
+back: longer, darker and wider, with a dip in the frequencies the lead uses for its words. Each
+lead preset says which backing preset it **pairs with**.
+
+| Preset | Use it for | Pairs with |
+|---|---|---|
+| **Behind** | Most backing vocals | Close Plate, Pop |
+| **Harmonies** | Stacked 3rds, 5ths and octaves, glued into one chord | Velvet |
+| **Doubles** | Doubles of the lead line, wrapped around it | Booth, Whisper |
+| **Ad-libs** | Ad-libs and call-and-response lines | Pop |
+| **Choir** | Big oohs, aahs and gang vocals | Close Plate |
+| **Vocal Glue** | A **return track** that every vocal is sent to | |
+
+- Put your backing vocal tracks in a group (**Cmd+G**) and put one Closer on the group, or one on
+  each part if they need different presets (doubles want more **Spread** than harmonies).
+- Pan backing vocal pairs wide, and sit harmonies 6-10 dB and doubles 8-12 dB below the lead.
+  You should feel the doubles more than hear them.
+- **Shared room:** put Closer on a return track with **Vocal Glue** (it turns on **Reverb Only**).
+  Turn the lead's send to about -12 dB and the backing vocals' to about -8 dB. Every voice then
+  sounds like it was sung in the same room.
+
+**The knobs**
+
+- **Space**: **Mix** is how much room is added. **Size** stays small (under 40%) for an intimate
+  sound. **Pre-delay** is a short gap before the room starts, which keeps the words clear and
+  upfront. **Damping** makes the room darker, and **Low Cut** stops it getting muddy. **Room Body**
+  adds chest and weight. **Duck** turns the room down while you sing so it only blooms between
+  phrases. The meter under Reverb Only shows how much it's ducking right now.
+- **Voice** shapes the dry vocal itself: **Voice Body** (low end), **Presence** (brings the words
+  forward), **Air** (breath and sparkle), **Warmth** (gentle saturation) and **Spread** (widens
+  doubles and stacks; leave it at 0% on a lead).
+- Too much reverb? Lower **Mix** before you lower **Decay**.
+
 ### Hearth
 
 Hearth is a drum kit you play from MIDI, like a Drum Rack. Drag it onto a MIDI track, then play
@@ -204,11 +257,12 @@ plugins/glitch    tempo-synced history-buffer effects
 plugins/prism     YIN pitch detection + TD-PSOLA harmonizer
 plugins/rig       guitar amp: dynamics, 4x oversampled preamp, tone stack, cab sim, effects
 plugins/hearth    drum synth: modal partials + beaded filtered noise per hit, room reverb
+plugins/closer    vocal reverb: dense diffusion + 8-line Hadamard FDN, ducking, voice EQ
 ```
 
 ```sh
 cargo test --workspace --release                       # DSP unit tests
-cargo xtask bundle -p halo -p glitch -p prism -p rig -p hearth --release   # into target/bundled
+cargo xtask bundle -p halo -p glitch -p prism -p rig -p hearth -p closer --release   # into target/bundled
 cargo run -p halo --features standalone --bin halo_standalone   # preview a GUI without a DAW
 ```
 
