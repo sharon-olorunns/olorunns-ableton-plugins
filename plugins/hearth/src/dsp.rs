@@ -188,22 +188,22 @@ impl Sound {
     /// Overall level of each sound so the kit is balanced out of the box.
     fn level(self) -> f32 {
         match self {
-            Sound::Kick => 0.75,
-            Sound::Rim => 0.32,
+            Sound::Kick => 0.6,
+            Sound::Rim => 0.375,
             Sound::BrushTap => 0.26,
             Sound::Clap => 0.55,
             Sound::BrushSlap => 0.24,
             Sound::LowTom => 0.44,
             Sound::HighTom => 0.5,
-            Sound::HatClosed => 0.32,
-            Sound::HatOpen => 0.25,
-            Sound::Shaker => 0.14,
+            Sound::HatClosed => 0.67,
+            Sound::HatOpen => 0.55,
+            Sound::Shaker => 0.12,
             Sound::Swirl => 0.12,
-            Sound::Tambourine => 0.09,
-            Sound::Snap => 0.4,
-            Sound::Swell => 0.4,
-            Sound::Stomp => 0.66,
-            Sound::Ride => 0.24,
+            Sound::Tambourine => 0.107,
+            Sound::Snap => 0.45,
+            Sound::Swell => 0.49,
+            Sound::Stomp => 0.59,
+            Sound::Ride => 0.26,
         }
     }
 }
@@ -367,7 +367,6 @@ impl Env {
 enum FilterKind {
     Low,
     Band,
-    High,
 }
 
 /// A state-variable filter (Andrew Simper's trapezoidal design). Cheap to retune, which the
@@ -402,7 +401,6 @@ impl Svf {
             FilterKind::Low => v2,
             // Scaled so the peak of the band has unity gain
             FilterKind::Band => self.k * v1,
-            FilterKind::High => x - self.k * v1 - v2,
         }
     }
 }
@@ -544,7 +542,6 @@ impl Voice {
         let bandwidth = match kind {
             FilterKind::Low => cutoff,
             FilterKind::Band => 1.57 * cutoff / q,
-            FilterKind::High => nyquist - cutoff,
         }
         .clamp(10.0, nyquist);
         let norm = (nyquist / bandwidth).sqrt().min(30.0);
@@ -606,48 +603,60 @@ impl Voice {
         let click = hit.click;
         match sound {
             Sound::Kick => {
-                // A felt beater on a loosely tuned kick: soft attack, round body, short thump
-                let f = 52.0 * t;
-                self.pitch_drop(hit, 0.75, 20.0);
-                self.add_mode(hit, f, 1.0, 3.0, 150.0 + 50.0 * (1.0 - hit.click));
-                self.add_mode(hit, f * 1.6, 0.14, 2.0, 55.0);
-                self.add_mode(hit, f * 2.3, 0.05, 2.0, 30.0);
-                self.add_noise(hit, FilterKind::Low, 650.0 * tn, 0.7, 0.3 * click, 0.4, 6.0);
-                self.add_noise(hit, FilterKind::Low, 160.0, 0.7, 0.35, 1.5, 22.0);
-            }
-            Sound::Stomp => {
-                // Foot on a wooden floor: low thump plus the boards ringing
-                let f = 66.0 * t;
-                self.pitch_drop(hit, 0.6, 14.0);
-                self.add_mode(hit, f, 1.0, 2.0, 105.0);
-                self.add_mode(hit, 228.0 * t, 0.3, 0.6, 38.0);
-                self.add_mode(hit, 412.0 * t, 0.18, 0.5, 22.0);
+                // A felt beater on a muffled kick: a short, rounded thump with no sub boom
+                let f = 64.0 * t;
+                self.pitch_drop(hit, 0.4, 12.0);
+                self.add_mode(hit, f, 1.0, 3.5, 60.0 + 30.0 * (1.0 - hit.click));
+                // The "pillow" thump of the head, which makes it sound soft rather than deep
+                self.add_mode(hit, f * 1.55, 0.3, 3.0, 42.0);
+                self.add_mode(hit, f * 2.35, 0.07, 2.5, 24.0);
                 self.add_noise(
                     hit,
                     FilterKind::Low,
-                    1300.0 * tn,
+                    900.0 * tn,
                     0.7,
-                    0.35 * click,
-                    0.5,
-                    10.0,
+                    0.22 * click,
+                    0.8,
+                    7.0,
                 );
-                self.add_noise(hit, FilterKind::Band, 750.0 * tn, 1.1, 0.2, 1.0, 40.0);
+                self.add_noise(hit, FilterKind::Low, 230.0, 0.7, 0.45, 2.0, 28.0);
+                self.soften(hit, 2500.0);
+            }
+            Sound::Stomp => {
+                // Foot on a wooden floor: a low thump plus the boards ringing briefly
+                let f = 72.0 * t;
+                self.pitch_drop(hit, 0.4, 12.0);
+                self.add_mode(hit, f, 1.0, 2.5, 70.0);
+                self.add_mode(hit, 228.0 * t, 0.3, 1.0, 32.0);
+                self.add_mode(hit, 412.0 * t, 0.14, 1.0, 18.0);
+                self.add_noise(
+                    hit,
+                    FilterKind::Low,
+                    1100.0 * tn,
+                    0.7,
+                    0.3 * click,
+                    1.0,
+                    9.0,
+                );
+                self.add_noise(hit, FilterKind::Band, 700.0 * tn, 1.0, 0.18, 1.5, 35.0);
+                self.soften(hit, 3500.0);
             }
             Sound::Rim => {
-                // Cross-stick: the stick lies on the head and clicks on the rim
-                self.add_mode(hit, 1720.0 * t, 0.45, 0.1, 9.0);
-                self.add_mode(hit, 1180.0 * t, 0.3, 0.1, 14.0);
-                self.add_mode(hit, 520.0 * t, 0.6, 0.2, 32.0);
-                self.add_mode(hit, 210.0 * t, 0.25, 0.4, 45.0);
+                // Cross-stick: the stick lies on the head and knocks on the rim. Woody, not clicky.
+                self.add_mode(hit, 1720.0 * t, 0.2, 0.4, 8.0);
+                self.add_mode(hit, 1180.0 * t, 0.2, 0.4, 12.0);
+                self.add_mode(hit, 520.0 * t, 0.6, 0.4, 30.0);
+                self.add_mode(hit, 210.0 * t, 0.25, 0.6, 40.0);
                 self.add_noise(
                     hit,
                     FilterKind::Band,
-                    2600.0 * tn,
-                    1.2,
-                    0.5 * click,
-                    0.1,
+                    2200.0 * tn,
+                    1.0,
+                    0.25 * click,
+                    0.4,
                     4.0,
                 );
+                self.soften(hit, 4500.0);
             }
             Sound::BrushTap => {
                 // Brush bristles landing on the snare. Mostly the drum answering: a soft thud,
@@ -693,65 +702,62 @@ impl Voice {
             }
             Sound::Clap => {
                 // A few hands, slightly out of time, then the room
-                let center = 1250.0 * tn;
+                let center = 1100.0 * tn;
                 let mut delay = 0.0;
                 for k in 0..3 {
-                    let i = self.add_noise(hit, FilterKind::Band, center, 1.3, 0.75, 0.3, 4.5);
+                    let i = self.add_noise(hit, FilterKind::Band, center, 1.2, 0.75, 0.8, 4.5);
                     self.delay_noise(i, hit, delay);
                     delay += 6.0 + self.rng() * 5.0 + k as f32;
                 }
-                let i = self.add_noise(hit, FilterKind::Band, center * 0.9, 0.9, 0.6, 0.5, 55.0);
+                let i = self.add_noise(hit, FilterKind::Band, center * 0.9, 0.9, 0.6, 1.0, 55.0);
                 self.delay_noise(i, hit, delay);
+                self.soften(hit, 5000.0);
             }
             Sound::Snap => {
-                self.add_noise(hit, FilterKind::Band, 2100.0 * tn, 2.2, 1.0, 0.2, 9.0);
+                self.add_noise(hit, FilterKind::Band, 1800.0 * tn, 1.4, 1.0, 0.6, 9.0);
                 self.add_noise(
                     hit,
                     FilterKind::Band,
-                    3800.0 * tn,
-                    1.5,
-                    0.35 * click,
-                    0.1,
+                    3400.0 * tn,
+                    1.2,
+                    0.15 * click,
+                    0.4,
                     4.0,
                 );
-                self.add_mode(hit, 1250.0 * t, 0.15, 0.1, 12.0);
+                self.add_mode(hit, 1250.0 * t, 0.08, 0.5, 12.0);
+                self.soften(hit, 5000.0);
             }
             Sound::LowTom | Sound::HighTom => {
-                // Toms played with felt mallets: warm, a gentle pitch drop, no attack click
-                let f = if sound == Sound::LowTom { 96.0 } else { 148.0 } * t;
-                let length = if sound == Sound::LowTom { 290.0 } else { 220.0 };
-                self.pitch_drop(hit, 0.3, 35.0);
-                self.add_mode(hit, f, 1.0, 3.0, length);
+                // Toms played with felt mallets: warm and short, a gentle pitch drop, no click
+                let f = if sound == Sound::LowTom { 98.0 } else { 150.0 } * t;
+                let length = if sound == Sound::LowTom { 140.0 } else { 110.0 };
+                self.pitch_drop(hit, 0.2, 30.0);
+                self.add_mode(hit, f, 1.0, 3.5, length);
                 self.add_mode(hit, f * 1.52, 0.25, 3.0, length * 0.45);
-                self.add_mode(hit, f * 2.1, 0.08, 2.0, length * 0.2);
-                self.add_noise(
-                    hit,
-                    FilterKind::Low,
-                    520.0 * tn,
-                    0.7,
-                    0.3 * click,
-                    0.5,
-                    10.0,
-                );
+                self.add_mode(hit, f * 2.1, 0.06, 2.5, length * 0.2);
+                self.add_noise(hit, FilterKind::Low, 300.0 * tn, 0.7, 0.25, 2.0, 22.0);
+                self.add_noise(hit, FilterKind::Low, 520.0 * tn, 0.7, 0.2 * click, 0.8, 8.0);
+                self.soften(hit, 2500.0);
             }
             Sound::HatClosed | Sound::HatOpen => {
-                // Inharmonic partials plus airy noise, kept soft and smooth
+                // Hats played softly: a gentle "tss" with the metal kept low and the top rolled off
                 let open = sound == Sound::HatOpen;
-                let length = if open { 320.0 } else { 32.0 };
+                let length = if open { 280.0 } else { 32.0 };
                 for (k, ratio) in [1.0, 1.36, 1.71, 1.98, 2.43, 2.81].iter().enumerate() {
-                    let amp = 0.12 - 0.012 * k as f32;
-                    self.add_mode(hit, 3350.0 * ratio * tn, amp, 0.4, length * 1.1);
+                    let amp = 0.07 - 0.008 * k as f32;
+                    self.add_mode(hit, 3000.0 * ratio * tn, amp, 1.0, length * 1.1);
                 }
                 self.add_noise(
                     hit,
-                    FilterKind::High,
-                    7000.0 * tn,
-                    0.7,
+                    FilterKind::Band,
+                    6500.0 * tn,
                     0.6,
-                    0.6,
+                    0.55,
+                    1.0,
                     length * 0.9,
                 );
-                self.add_noise(hit, FilterKind::Band, 9500.0 * tn, 0.9, 0.35, 0.6, length);
+                self.add_noise(hit, FilterKind::Band, 8500.0 * tn, 0.9, 0.2, 1.0, length);
+                self.soften(hit, 9000.0);
             }
             Sound::Ride => {
                 // A brush on the ride: a wash with a hint of bell, no stick ping
@@ -766,7 +772,7 @@ impl Voice {
                 let i = self.add_noise(hit, FilterKind::Band, 5200.0 * tn, 0.5, 0.4, 4.0, 900.0);
                 self.beads(i, hit, 6000.0, 0.8);
                 self.add_noise(hit, FilterKind::Band, 6500.0 * tn, 0.6, 0.12, 2.0, 380.0);
-                self.soften(hit, 9000.0);
+                self.soften(hit, 7500.0);
             }
             Sound::Swell => {
                 // Soft mallets rolling on a cymbal: grows over two beats, then rings out
@@ -794,6 +800,7 @@ impl Voice {
                     attack_ms,
                     900.0,
                 );
+                self.soften(hit, 8000.0);
                 for m in &mut self.modes[..self.mode_count] {
                     m.env.curved = true;
                 }
@@ -802,21 +809,23 @@ impl Voice {
                 }
             }
             Sound::Shaker => {
-                // Beads inside an egg: a swish made of many tiny clicks
-                let i = self.add_noise(hit, FilterKind::Band, 6500.0 * tn, 1.0, 0.9, 12.0, 50.0);
-                self.beads(i, hit, 6000.0, 0.2);
-                self.add_noise(hit, FilterKind::High, 8000.0 * tn, 0.7, 0.18, 8.0, 35.0);
+                // Beads inside an egg: a soft swish made of many tiny grains
+                let i = self.add_noise(hit, FilterKind::Band, 5200.0 * tn, 0.9, 0.9, 15.0, 50.0);
+                self.beads(i, hit, 9000.0, 0.45);
+                self.add_noise(hit, FilterKind::Band, 7000.0 * tn, 0.7, 0.12, 10.0, 35.0);
+                self.soften(hit, 8500.0);
             }
             Sound::Tambourine => {
-                // Jingles: ringing metal chopped up by the zils clashing
-                let i = self.add_noise(hit, FilterKind::Band, 7600.0 * tn, 2.0, 0.85, 1.0, 150.0);
+                // Jingles: ringing metal chopped up by the zils clashing, kept gentle
+                let i = self.add_noise(hit, FilterKind::Band, 6800.0 * tn, 1.8, 0.85, 1.5, 150.0);
                 self.beads(i, hit, 2600.0, 1.2);
-                let j = self.add_noise(hit, FilterKind::Band, 5300.0 * tn, 2.5, 0.4, 1.0, 120.0);
+                let j = self.add_noise(hit, FilterKind::Band, 5000.0 * tn, 2.2, 0.4, 1.5, 120.0);
                 self.beads(j, hit, 1800.0, 1.5);
-                self.add_noise(hit, FilterKind::High, 9500.0 * tn, 0.7, 0.25, 0.5, 55.0);
+                self.add_noise(hit, FilterKind::Band, 8500.0 * tn, 0.8, 0.12, 1.0, 55.0);
                 for f in [5310.0, 6870.0, 8120.0, 9650.0] {
-                    self.add_mode(hit, f * tn, 0.03, 1.0, 110.0);
+                    self.add_mode(hit, f * tn, 0.02, 1.5, 110.0);
                 }
+                self.soften(hit, 9500.0);
             }
         }
     }
