@@ -1,4 +1,5 @@
-//! Rig: a guitar amp and tone shaper with six styles, from intimate acoustic to huge ambient.
+//! Rig: a guitar amp and tone shaper with seven styles, from intimate acoustic to huge ambient,
+//! plus a slide guitar effect.
 
 use nih_plug::prelude::*;
 use nih_plug_egui::EguiState;
@@ -36,16 +37,19 @@ pub enum StyleParam {
     #[name = "Math Rock"]
     MathRock,
     Atmospheric,
+    // New styles go at the end so saved projects keep their style
+    Slide,
 }
 
 impl StyleParam {
-    pub const ALL: [StyleParam; 6] = [
+    pub const ALL: [StyleParam; 7] = [
         StyleParam::Acoustic,
         StyleParam::Indie,
         StyleParam::LoFi,
         StyleParam::PopRock,
         StyleParam::MathRock,
         StyleParam::Atmospheric,
+        StyleParam::Slide,
     ];
 
     pub fn style(self) -> Style {
@@ -56,6 +60,7 @@ impl StyleParam {
             StyleParam::PopRock => Style::PopRock,
             StyleParam::MathRock => Style::MathRock,
             StyleParam::Atmospheric => Style::Atmospheric,
+            StyleParam::Slide => Style::Slide,
         }
     }
 }
@@ -89,6 +94,8 @@ pub struct RigParams {
     pub echo: FloatParam,
     #[id = "reverb"]
     pub reverb: FloatParam,
+    #[id = "slide"]
+    pub slide: FloatParam,
 }
 
 fn percent_param(name: &str, default: f32) -> FloatParam {
@@ -127,7 +134,7 @@ impl Default for RigParams {
     fn default() -> Self {
         let d = Style::Indie.voicing().defaults;
         Self {
-            editor_state: EguiState::from_size(720, 470),
+            editor_state: EguiState::from_size(800, 470),
             style: EnumParam::new("Style", StyleParam::Indie),
             gate: percent_param("Gate", d.gate),
             comp: percent_param("Comp", d.comp),
@@ -149,6 +156,7 @@ impl Default for RigParams {
             modulation: percent_param("Mod", d.modulation),
             echo: percent_param("Echo", d.echo),
             reverb: percent_param("Reverb", d.reverb),
+            slide: percent_param("Slide", d.slide),
         }
     }
 }
@@ -168,6 +176,7 @@ impl RigParams {
                 modulation: self.modulation.value(),
                 echo: self.echo.value(),
                 reverb: self.reverb.value(),
+                slide: self.slide.value(),
             },
             output_db: self.output.value(),
         }
@@ -278,7 +287,7 @@ impl Plugin for Rig {
 impl ClapPlugin for Rig {
     const CLAP_ID: &'static str = "com.olorunns.rig";
     const CLAP_DESCRIPTION: Option<&'static str> =
-        Some("Guitar amp and tone shaper with six styles");
+        Some("Guitar amp and tone shaper with seven styles and slide guitar");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[

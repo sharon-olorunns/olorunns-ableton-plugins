@@ -8,7 +8,7 @@ They're VST3 plugins, so they work in every edition of Live (Lite, Intro, Standa
 | **Prism**: sing one note, hold a chord on your keyboard, and your voice sings the chord (think Imogen Heap's "Hide and Seek" or Bon Iver's "715 - CRΣΣKS"). An auto mode adds in-key harmonies without a keyboard, and Live mode lets you sing through it with almost no delay. | ![Prism](docs/prism.png) |
 | **Halo**: a huge, lush reverb with a **Freeze** button that holds a sound forever (turn a guitar chord into a pad) and **Shimmer** for octave-up sparkle. | ![Halo](docs/halo.png) |
 | **Glitch**: tempo-synced stutters, reverses, tape stops and chops. Every key on your MIDI keyboard is a different effect, or let it glitch by itself. | ![Glitch](docs/glitch.png) |
-| **Rig**: a guitar amp and tone shaper with six styles (Acoustic, Indie, Lo-Fi, Pop Rock, Math Rock and Atmospheric) for your acoustic and electric guitars. | ![Rig](docs/rig.png) |
+| **Rig**: a guitar amp and tone shaper with seven styles (Acoustic, Indie, Lo-Fi, Pop Rock, Math Rock, Atmospheric and Slide) for your acoustic and electric guitars, plus a **Slide** knob that gives you slide guitar without a slide. | ![Rig](docs/rig.png) |
 | **Hearth**: a soft, natural drum kit for folk and indie songs: brushes, felt mallets, shaker, tambourine and a warm wooden room. For when you want percussion that sits gently under the song. | |
 | **Closer**: an intimate vocal reverb that adds warmth and body while keeping the voice close and present, never far away or echoey. It has presets for lead vocals and matching presets for backing vocals, so they sit just behind the lead. | ![Closer](docs/closer.png) |
 
@@ -131,6 +131,7 @@ if it's much quieter or louder, adjust the input gain on your interface.
 | **Pop Rock** | Tight high-gain amp through a 4x12 cab, crunch to fuzz, wide double-tracked spread | underscores, brakence |
 | **Math Rock** | Glassy, compressed clean with headroom for tapping and twinkly riffs, dotted-eighth echo | brakence's midwest-emo side |
 | **Atmospheric** | Volume swells, deep slow chorus, dotted-eighth echoes, huge shimmering reverb | Bon Iver, Novo Amor, Porter Robinson |
+| **Slide** | Warm amp on the edge of breaking up, long sustain, glassy highs, slapback and spring-style reverb, with the Slide knob turned up | Lap steel on indie-folk records, old bottleneck blues |
 
 - **Amp**: **Gate** cuts hum between notes (useful for Pop Rock), **Comp** evens out your playing
   and adds sustain, **Drive** goes from clean to distorted (how far depends on the style),
@@ -138,6 +139,15 @@ if it's much quieter or louder, adjust the input gain on your interface.
 - **Effects**: **Swell** fades each note in, like rolling up your volume knob after picking.
   **Mod**, **Echo** and **Reverb** change character with the style: the line above the knobs
   says what they do in the style you're using. Echoes lock to your song's tempo.
+- **Slide** gives you slide guitar without a slide, in any style. Every note you pick starts a
+  little flat and slides up into pitch, the way a bottleneck lands on a note, then a slow,
+  singing vibrato fades in. Turn it up for deeper, slower slides and wider vibrato. Each slide is
+  slightly different, and it moves every string of a chord together, like a real slide.
+
+  It works best played like slide: let notes ring, pick fewer notes and leave space between
+  them. It reacts to each note you pick, so it can't glide between notes you hammer on or play
+  legato. The **Slide** style sets everything up for you, and a little **Swell** (10-25%) hides
+  the pick attack for a smoother, lap-steel feel.
 - The styles are tuned by ear to suggest those artists' sounds, not copies of anyone's actual
   gear. Every guitar and pickup is different, so expect to adjust Drive and the tone knobs.
 

@@ -1,7 +1,7 @@
 //! Rig's signal chain. Mono guitar in, stereo out:
 //!
 //! ```text
-//! gate -> compressor -> swell -> preamp (4x oversampled) -> tone stack -> style EQ
+//! gate -> compressor -> swell -> slide -> preamp (4x oversampled) -> tone stack -> style EQ
 //!      -> cabinet (or acoustic voicing) -> modulation -> echo -> reverb -> output
 //! ```
 //!
@@ -19,6 +19,13 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 const REFERENCE_LEVEL: f32 = 0.2;
 const MAX_ECHO_SECONDS: f32 = 2.0;
 const MOD_BUFFER_MS: f32 = 40.0;
+/// Room in the slide's delay line for the pitch to bend into, in milliseconds.
+const SLIDE_BUFFER_MS: f32 = 60.0;
+/// Resting delay of the slide's read head, so vibrato has room to swing both ways.
+const SLIDE_BASE_MS: f32 = 2.0;
+/// How fast the read head drifts back to rest after a slide (0.15% = about 2.6 cents sharp,
+/// too little to hear under the vibrato).
+const SLIDE_RETURN: f32 = 0.0015;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
@@ -108,6 +115,157 @@ impl Swell {
     }
 }
 
+/// Slide guitar. Each new note starts a little flat and eases up into pitch, the way a bottleneck
+/// lands on a note, then a slow vibrato fades in.
+///
+/// The pitch moves by sweeping a read head through a short delay line (the Doppler effect): a
+/// head that falls further behind plays lower, one that catches up plays higher. Unlike a grain
+/// pitch shifter this is completely clean, and like a real slide it moves every string of a chord
+/// together.
+struct Slide {
+    line: DelayLine,
+    sample_rate: f32,
+    amount: f32,
+    fast: EnvelopeFollower,
+    slow: EnvelopeFollower,
+    holdoff: u32,
+    holdoff_len: u32,
+    /// Two read heads so a new note can start fresh while the old one fades out.
+    heads: [f32; 2],
+    active: usize,
+    fade: f32,
+    fade_step: f32,
+    base: f32,
+    max_delay: f32,
+    /// Progress through the slide into the note, 0..1 (1 = arrived).
+    scoop: f32,
+    scoop_step: f32,
+    /// How far below the note the slide starts, in semitones.
+    depth: f32,
+    vibrato_phase: f32,
+    vibrato_rate: f32,
+    vibrato_env: f32,
+    vibrato_step: f32,
+    rng: Rng,
+}
+
+impl Slide {
+    fn new(sample_rate: f32) -> Self {
+        let base = SLIDE_BASE_MS * 0.001 * sample_rate;
+        let line = DelayLine::new((SLIDE_BUFFER_MS * 0.001 * sample_rate) as usize);
+        let max_delay = line.capacity() as f32 - 4.0;
+        Self {
+            line,
+            sample_rate,
+            amount: 0.0,
+            fast: EnvelopeFollower::new(1.0, 25.0, sample_rate),
+            slow: EnvelopeFollower::new(60.0, 400.0, sample_rate),
+            holdoff: 0,
+            holdoff_len: (0.09 * sample_rate) as u32,
+            heads: [base; 2],
+            active: 0,
+            fade: 1.0,
+            fade_step: 1.0 / (0.008 * sample_rate),
+            base,
+            max_delay,
+            scoop: 1.0,
+            scoop_step: 0.0,
+            depth: 0.0,
+            vibrato_phase: 0.0,
+            vibrato_rate: 5.2,
+            vibrato_env: 0.0,
+            vibrato_step: 1.0 / (0.35 * sample_rate),
+            rng: Rng::new(0x511d),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.line.clear();
+        self.fast.reset();
+        self.slow.reset();
+        self.heads = [self.base; 2];
+        self.fade = 1.0;
+        self.scoop = 1.0;
+        self.vibrato_env = 0.0;
+        self.holdoff = 0;
+    }
+
+    fn set_amount(&mut self, amount: f32) {
+        let amount = amount.clamp(0.0, 1.0);
+        if self.amount < 1e-3 && amount >= 1e-3 {
+            // Coming out of bypass: fade in from (almost) the dry signal
+            self.heads = [self.base, 2.0];
+            self.active = 0;
+            self.fade = 0.0;
+        }
+        self.amount = amount;
+    }
+
+    /// A new note was picked: start a fresh slide up into it.
+    fn note_on(&mut self) {
+        let a = self.amount;
+        let other = 1 - self.active;
+        self.heads[other] = self.base;
+        self.active = other;
+        self.fade = 0.0;
+        // Every slide lands a little differently
+        self.depth = (0.5 + 2.0 * a) * (0.8 + 0.4 * self.rng.next_f32());
+        let seconds = (0.045 + 0.12 * a) * (0.85 + 0.3 * self.rng.next_f32());
+        self.scoop = 0.0;
+        self.scoop_step = 1.0 / (seconds * self.sample_rate);
+        self.vibrato_env = 0.0;
+        self.vibrato_rate = 4.8 + 0.8 * self.rng.next_f32();
+        self.vibrato_phase = self.rng.next_f32();
+    }
+
+    #[inline]
+    fn process(&mut self, x: f32) -> f32 {
+        self.line.push(x);
+        let fast = self.fast.process(x);
+        let slow = self.slow.process(x);
+        if self.amount < 1e-3 {
+            return x;
+        }
+        if self.holdoff > 0 {
+            self.holdoff -= 1;
+        } else if fast > 0.003 && fast > slow * 2.0 {
+            self.note_on();
+            self.holdoff = self.holdoff_len;
+        }
+
+        // Pitch offset in semitones: ease up from below, fast at first then settling
+        let mut semitones = 0.0;
+        if self.scoop < 1.0 {
+            let left = 1.0 - self.scoop;
+            semitones -= self.depth * left * left;
+            self.scoop += self.scoop_step;
+        } else {
+            self.vibrato_env = (self.vibrato_env + self.vibrato_step).min(1.0);
+        }
+        self.vibrato_phase = (self.vibrato_phase + self.vibrato_rate / self.sample_rate).fract();
+        // 6 to 20 cents of vibrato
+        let vibrato_depth = 0.06 + 0.14 * self.amount;
+        semitones += vibrato_depth * self.vibrato_env * (TAU * self.vibrato_phase).sin();
+
+        // Playing at `ratio` speed means the head falls behind by (1 - ratio) each sample
+        let ratio = (semitones / 12.0).exp2();
+        let a = self.active;
+        let mut delay = self.heads[a] + (1.0 - ratio);
+        delay += (self.base - delay).clamp(-SLIDE_RETURN, SLIDE_RETURN);
+        delay = delay.clamp(2.0, self.max_delay);
+        self.heads[a] = delay;
+
+        let new = self.line.read_cubic(delay);
+        if self.fade < 1.0 {
+            self.fade = (self.fade + self.fade_step).min(1.0);
+            let old = self.line.read_cubic(self.heads[1 - a]);
+            old + (new - old) * self.fade
+        } else {
+            new
+        }
+    }
+}
+
 pub struct RigEngine {
     sample_rate: f32,
     settings: Settings,
@@ -128,6 +286,7 @@ pub struct RigEngine {
     comp_makeup: f32,
 
     swell: Swell,
+    slide: Slide,
 
     input_highpass: Biquad,
     oversampler: Oversampler4x,
@@ -198,6 +357,7 @@ impl RigEngine {
             comp_ratio: 1.0,
             comp_makeup: 1.0,
             swell: Swell::new(sample_rate),
+            slide: Slide::new(sample_rate),
             input_highpass: Biquad::default(),
             oversampler: Oversampler4x::new(),
             stage,
@@ -248,6 +408,7 @@ impl RigEngine {
             line.clear();
         }
         self.reverb.reset();
+        self.slide.reset();
         for f in self
             .tone
             .iter_mut()
@@ -400,6 +561,7 @@ impl RigEngine {
             1.0
         };
 
+        self.slide.set_amount(k.slide);
         self.mod_amount.set_target(k.modulation.clamp(0.0, 1.0));
         self.echo_amount.set_target(k.echo.clamp(0.0, 1.0));
         self.reverb_amount.set_target(k.reverb.clamp(0.0, 1.0));
@@ -549,6 +711,7 @@ impl RigEngine {
         if self.swell.step < 1.0 {
             s *= self.swell.process(s);
         }
+        s = self.slide.process(s);
 
         // Preamp
         s = self.input_highpass.process(s);
@@ -638,6 +801,7 @@ mod tests {
         s.knobs.reverb = 0.0;
         s.knobs.swell = 0.0;
         s.knobs.gate = 0.0;
+        s.knobs.slide = 0.0;
         s
     }
 
@@ -809,6 +973,117 @@ mod tests {
         );
     }
 
+    /// Frequency in 10 ms windows, from zero crossings with linear interpolation.
+    fn pitch_track(s: &[f32]) -> Vec<f32> {
+        s.chunks(480)
+            .map(|c| {
+                let crossings: Vec<f32> = c
+                    .windows(2)
+                    .enumerate()
+                    .filter(|(_, w)| w[0] <= 0.0 && w[1] > 0.0)
+                    .map(|(i, w)| i as f32 + w[0] / (w[0] - w[1]))
+                    .collect();
+                if crossings.len() < 2 {
+                    return 0.0;
+                }
+                let periods = (crossings.len() - 1) as f32;
+                periods * SR / (crossings[crossings.len() - 1] - crossings[0])
+            })
+            .collect()
+    }
+
+    /// A clean, slowly decaying sine note starting after some silence.
+    fn sine_note(freq: f32, seconds: f32) -> Vec<f32> {
+        let mut input = vec![0.0; 12_000];
+        input.extend((0..(seconds * SR) as usize).map(|i| {
+            let t = i as f32 / SR;
+            (TAU * freq * t).sin() * 0.2 * (-t * 0.5).exp()
+        }));
+        input
+    }
+
+    fn slide_settings(amount: f32) -> Settings {
+        let mut s = dry(Style::MathRock);
+        s.knobs.drive = 0.0;
+        s.knobs.comp = 0.0;
+        s.knobs.slide = amount;
+        s
+    }
+
+    #[test]
+    fn slide_glides_up_into_each_note() {
+        let input = sine_note(220.0, 1.5);
+        let (l, _) = render(slide_settings(1.0), &input);
+        let track = pitch_track(&l[12_000..]);
+        // Starts clearly flat...
+        let start = track[1..4].iter().cloned().fold(f32::MAX, f32::min);
+        assert!(start < 220.0 * 0.93, "starts at {start} Hz");
+        // ...rises steadily...
+        assert!(
+            track[2] < track[8] && track[8] <= track[16] + 1.0,
+            "{:?}",
+            &track[..20]
+        );
+        // ...and lands on the note, then sings around it with vibrato
+        let settled = &track[60..140];
+        let mean = settled.iter().sum::<f32>() / settled.len() as f32;
+        assert!((mean - 220.0).abs() < 2.5, "settles at {mean} Hz");
+        let max = settled.iter().cloned().fold(f32::MIN, f32::max);
+        let min = settled.iter().cloned().fold(f32::MAX, f32::min);
+        assert!(max - min > 1.5, "no vibrato: {min}..{max} Hz");
+        assert!(max - min < 8.0, "vibrato too wide: {min}..{max} Hz");
+    }
+
+    #[test]
+    fn slide_off_leaves_the_pitch_alone() {
+        let input = sine_note(220.0, 1.0);
+        let (l, _) = render(slide_settings(0.0), &input);
+        let track = pitch_track(&l[12_000..]);
+        for f in &track[1..90] {
+            assert!((f - 220.0).abs() < 1.0, "{f} Hz");
+        }
+    }
+
+    #[test]
+    fn more_slide_starts_further_below() {
+        let input = sine_note(330.0, 0.5);
+        let lowest = |amount: f32| {
+            let (l, _) = render(slide_settings(amount), &input);
+            pitch_track(&l[12_000..18_000])[1..]
+                .iter()
+                .cloned()
+                .fold(f32::MAX, f32::min)
+        };
+        let gentle = lowest(0.2);
+        let deep = lowest(1.0);
+        assert!(gentle < 330.0 && deep < gentle - 8.0, "{gentle} vs {deep}");
+    }
+
+    #[test]
+    fn slide_keeps_up_with_fast_playing() {
+        // A new note every 150 ms for 6 seconds: the read head must never run away
+        let mut input = vec![0.0; 6 * SR as usize];
+        for n in 0..40 {
+            let freq = [196.0, 220.0, 247.0, 294.0][n % 4];
+            let p = pluck(freq, 0.15, 0.25, n as u32 + 1);
+            let start = n * 7200;
+            for (i, v) in p.iter().enumerate() {
+                input[start + i] += v;
+            }
+        }
+        let mut engine = RigEngine::new(SR);
+        engine.set(&slide_settings(1.0));
+        for x in &input {
+            let (l, r) = engine.process(*x, *x);
+            assert!(l.is_finite() && r.is_finite() && l.abs() < 2.0);
+        }
+        let heads = engine.slide.heads;
+        assert!(
+            heads.iter().all(|h| *h < 0.03 * SR),
+            "heads ran away: {heads:?}"
+        );
+    }
+
     #[test]
     fn switching_styles_while_playing_is_safe() {
         let input = strum();
@@ -821,6 +1096,7 @@ mod tests {
                 s.knobs.echo = 1.0;
                 s.knobs.reverb = 1.0;
                 s.knobs.modulation = 1.0;
+                s.knobs.slide = (i / 20_000 % 3) as f32 * 0.5;
                 engine.set(&s);
             }
             let (l, r) = engine.process(*x, *x);

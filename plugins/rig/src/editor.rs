@@ -29,6 +29,7 @@ fn apply_style(params: &RigParams, setter: &ParamSetter, style: StyleParam) {
     set(setter, &params.modulation, d.modulation);
     set(setter, &params.echo, d.echo);
     set(setter, &params.reverb, d.reverb);
+    set(setter, &params.slide, d.slide);
 }
 
 pub fn create(params: Arc<RigParams>, meters: Arc<Meters>) -> Option<Box<dyn Editor>> {
@@ -114,6 +115,9 @@ pub fn create(params: Arc<RigParams>, meters: Arc<Meters>) -> Option<Box<dyn Edi
                             knob(ui, &theme, &params.modulation, setter, KNOB);
                             knob(ui, &theme, &params.echo, setter, KNOB);
                             knob(ui, &theme, &params.reverb, setter, KNOB);
+                            knob(ui, &theme, &params.slide, setter, KNOB).on_hover_text(
+                                "Slide guitar: each note slides up into pitch and sings with a slow vibrato. Works in every style",
+                            );
                             ui.add_space(24.0);
                             ui.vertical(|ui| {
                                 ui.add_space(10.0);
@@ -137,7 +141,7 @@ fn style_button(
     tagline: &str,
     selected: bool,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(108.0, 54.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(102.0, 54.0), Sense::click());
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         let radius = CornerRadius::same(10);

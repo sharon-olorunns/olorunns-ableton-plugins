@@ -11,16 +11,18 @@ pub enum Style {
     PopRock,
     MathRock,
     Atmospheric,
+    Slide,
 }
 
 impl Style {
-    pub const ALL: [Style; 6] = [
+    pub const ALL: [Style; 7] = [
         Style::Acoustic,
         Style::Indie,
         Style::LoFi,
         Style::PopRock,
         Style::MathRock,
         Style::Atmospheric,
+        Style::Slide,
     ];
 }
 
@@ -95,6 +97,8 @@ pub struct Knobs {
     pub modulation: f32,
     pub echo: f32,
     pub reverb: f32,
+    /// Slide guitar: notes slide up into pitch and sing with a slow vibrato. 0 = off.
+    pub slide: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -135,6 +139,7 @@ impl Style {
             Style::PopRock => &POP_ROCK,
             Style::MathRock => &MATH_ROCK,
             Style::Atmospheric => &ATMOSPHERIC,
+            Style::Slide => &SLIDE,
         }
     }
 }
@@ -191,6 +196,7 @@ static ACOUSTIC: Voicing = Voicing {
         modulation: 0.0,
         echo: 0.0,
         reverb: 0.25,
+        slide: 0.0,
     },
     level_db: 0.0,
     fx_summary: "Mod: gentle chorus  ·  Echo: soft 1/8  ·  Reverb: small room",
@@ -251,6 +257,7 @@ static INDIE: Voicing = Voicing {
         modulation: 0.3,
         echo: 0.15,
         reverb: 0.3,
+        slide: 0.0,
     },
     level_db: 0.0,
     fx_summary: "Mod: chorus  ·  Echo: slapback  ·  Reverb: bright spring-style",
@@ -308,6 +315,7 @@ static LOFI: Voicing = Voicing {
         modulation: 0.45,
         echo: 0.1,
         reverb: 0.2,
+        slide: 0.0,
     },
     level_db: 0.0,
     fx_summary: "Mod: tape wow & flutter  ·  Echo: tape slapback  ·  Reverb: small dull room",
@@ -365,6 +373,7 @@ static POP_ROCK: Voicing = Voicing {
         modulation: 0.4,
         echo: 0.08,
         reverb: 0.12,
+        slide: 0.0,
     },
     level_db: -5.0,
     fx_summary: "Mod: double-tracked width  ·  Echo: ping-pong 1/8  ·  Reverb: room",
@@ -425,6 +434,7 @@ static MATH_ROCK: Voicing = Voicing {
         modulation: 0.0,
         echo: 0.1,
         reverb: 0.18,
+        slide: 0.0,
     },
     level_db: 3.5,
     fx_summary: "Mod: light chorus  ·  Echo: dotted 1/8 ping-pong  ·  Reverb: short plate",
@@ -483,7 +493,74 @@ static ATMOSPHERIC: Voicing = Voicing {
         modulation: 0.4,
         echo: 0.35,
         reverb: 0.45,
+        slide: 0.0,
     },
     level_db: 3.0,
     fx_summary: "Mod: deep slow chorus  ·  Echo: dotted 1/8  ·  Reverb: huge with shimmer",
+};
+
+static SLIDE: Voicing = Voicing {
+    name: "Slide",
+    tagline: "glassy & singing",
+    description: "Bottleneck and lap-steel tones: a warm amp on the edge of breaking up, long \
+                  sustain, glassy highs and a spring-style reverb. The Slide knob makes every \
+                  note slide up into pitch and sing with a slow vibrato, like the lap steel on \
+                  indie-folk records or old bottleneck blues.",
+    input_highpass: 75.0,
+    shaper: Shaper::Tube { bias: 0.2 },
+    drive_db: (3.0, 30.0),
+    bass_freq: 110.0,
+    mid_freq: 750.0,
+    treble_freq: 3200.0,
+    voice_eq: &[
+        // A rounded, vocal midrange, and a little glass on top
+        (BiquadType::Peak(2.0), 800.0, 0.7),
+        (BiquadType::Peak(-2.0), 2600.0, 1.2),
+        (BiquadType::HighShelf(1.5), 4500.0, 0.7),
+    ],
+    cab: Some(Cab {
+        highpass: 80.0,
+        resonance: (115.0, 2.5, 1.3),
+        dip: (400.0, -2.0, 1.0),
+        presence: (2200.0, 1.5, 1.0),
+        lowpass: 5000.0,
+    }),
+    // Slow attack keeps the note's start, long release gives the sustain slide needs
+    comp_attack_ms: 20.0,
+    comp_release_ms: 260.0,
+    modulation: ModKind::Chorus {
+        rate: 0.5,
+        depth: 1.8,
+        base: 8.0,
+    },
+    echo: Echo {
+        time: EchoTime::Ms(130.0),
+        feedback: 0.18,
+        lowpass: 3000.0,
+        ping_pong: false,
+    },
+    space: Space {
+        size: 0.5,
+        decay: 2.4,
+        tone: 0.55,
+        predelay: 10.0,
+        low_cut: 200.0,
+        motion: 0.35,
+        shimmer: 0.0,
+    },
+    defaults: Knobs {
+        gate: 0.1,
+        comp: 0.55,
+        drive: 0.35,
+        bass: 0.0,
+        mid: 0.1,
+        treble: 0.05,
+        swell: 0.15,
+        modulation: 0.15,
+        echo: 0.2,
+        reverb: 0.3,
+        slide: 0.6,
+    },
+    level_db: 0.0,
+    fx_summary: "Mod: gentle chorus  ·  Echo: slapback  ·  Reverb: spring-style",
 };
